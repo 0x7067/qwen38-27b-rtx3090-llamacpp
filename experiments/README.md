@@ -14,3 +14,4 @@ for the next attempt, not for production use.
 - `testcov-mulmat-qwen38-verify.patch` — adds the Qwen3.8 speculative-verify
   GEMM shapes to `test-backend-ops`. Upstream has no coverage for them. Apply
   this before benching any MMQ change.
+- `testcov-fattn-wide-verify-widths.patch` — FA test cases for verify widths 16–64 at 32k/64k KV depth (D=256, GQA 6, q4_0 KV). This crossover region of a shipped kernel had zero upstream coverage, which is how the inline-path bound went unmeasured for two waves. Apply before benching any FA change.

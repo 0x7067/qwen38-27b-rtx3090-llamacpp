@@ -1,0 +1,72 @@
+From 07dc876c99ba87f7a6771997a533839a078ea273 Mon Sep 17 00:00:00 2001
+From: Denguinho <k@local>
+Date: Mon, 17 Aug 2026 23:19:00 +0000
+Subject: [PATCH] test-backend-ops: cover wide speculative-verify FA widths at
+ production KV depths
+
+The CUDA FlashAttention path for head size 256 with grouped-query attention and a
+quantized K/V cache has two implementations that swap over at a fixed batch width:
+below the bound the inline-dequant MMA kernel reads q4_0 directly, above it the whole
+K/V cache is converted to an F16 scratch copy once per op. Existing coverage for this
+geometry stops at nb=9 and kv=33024, so every shape at or beyond the swap point was
+untested -- both the correctness of the wider inline instantiations and the cost
+crossover itself. That gap is why the bound has been an unmeasured constant since it
+was introduced: measuring it required cases that did not exist. Speculative decoding
+with an n-gram drafter routinely produces verify batches of 17 to 64 tokens at 30k-60k
+context, which is exactly the untested region. This adds nb in {16, 24, 32, 48, 64} at
+kv in {32768, 65536} for D=256, GQA ratio 6, q4_0 K/V, to both the eval and the perf
+lists -- perf keeps a separate case list, so cases added only to eval measure nothing.
+
+Test-only; no kernel or dispatch change.
+---
+ tests/test-backend-ops.cpp | 27 +++++++++++++++++++++++++++
+ 1 file changed, 27 insertions(+)
+
+diff --git a/tests/test-backend-ops.cpp b/tests/test-backend-ops.cpp
+index e61f99eb1..efbe0f955 100644
+--- a/tests/test-backend-ops.cpp
++++ b/tests/test-backend-ops.cpp
+@@ -9874,6 +9874,19 @@ static std::vector<std::unique_ptr<test_case>> make_test_cases_eval() {
+     test_cases.emplace_back(new test_flash_attn_ext(64, 128, 4, {1, 1}, 128, 2, true, false, 0, 0, GGML_PREC_F32, GGML_TYPE_Q4_0, GGML_TYPE_Q2_0));
+     test_cases.emplace_back(new test_flash_attn_ext(128, 64, 4, {1, 1}, 64, 2, true, false, 0, 0, GGML_PREC_F32, GGML_TYPE_Q2_0, GGML_TYPE_F16));
+ 
++    // wave 9: wide speculative-verify batches at production KV depths. ngram-mod copy rounds
++    // produce verify batches of 17..64 tokens, which are above patch 0005's inline-dequant cap and
++    // fall back to converting the whole K/V cache to an F16 scratch copy. The existing coverage
++    // stops at nb=9 and kv=33024, so the crossover between the two paths had no cases at all.
++    // ncols1 saturates at 8 for this geometry, so the inline path re-runs its dequant
++    // ceil(nb/8) times while the fallback converts once -- that is what these shapes measure.
++    for (int64_t kv : { 32768, 65536 }) {
++        for (int nb : { 16, 24, 32, 48, 64 }) {
++            test_cases.emplace_back(new test_flash_attn_ext(256, 256, 4, {6, 1}, kv, nb, true, false, 0, 0,
++                                                            GGML_PREC_F32, GGML_TYPE_Q4_0, GGML_TYPE_Q4_0));
++        }
++    }
++
+     // large-KV F16 cases (Qwen3.6-27B geometry and a llama-class control): the upstream matrix
+     // stops at kv=1024, blind to long-context FA bugs (e.g. the oneDNN SDPA ordering race on BMG).
+     for (int64_t kv : { 4096, 16384 }) {
+@@ -10285,6 +10298,20 @@ static std::vector<std::unique_ptr<test_case>> make_test_cases_perf() {
+     test_cases.emplace_back(new test_flash_attn_ext(64, 64, 8, {8, 1}, 7680, 4, true, false, 0, 0, GGML_PREC_F32, GGML_TYPE_F16, GGML_TYPE_F16));
+     test_cases.emplace_back(new test_flash_attn_ext(64, 64, 8, {8, 1}, 7680,   1, true, false, 0, 0, GGML_PREC_F32, GGML_TYPE_Q4_0, GGML_TYPE_Q4_0));
+     test_cases.emplace_back(new test_flash_attn_ext(64, 64, 8, {8, 1}, 7680, 512, true, false, 0, 0, GGML_PREC_F32, GGML_TYPE_Q4_0, GGML_TYPE_Q4_0));
++
++    // wave 9: wide speculative-verify batches at production KV depths. ngram-mod copy rounds
++    // produce verify batches of 17..64 tokens, which are above patch 0005's inline-dequant cap and
++    // fall back to converting the whole K/V cache to an F16 scratch copy. The existing coverage
++    // stops at nb=9 and kv=33024, so the crossover between the two paths had no cases at all.
++    // ncols1 saturates at 8 for this geometry, so the inline path re-runs its dequant
++    // ceil(nb/8) times while the fallback converts once -- that is what these shapes measure.
++    for (int64_t kv : { 32768, 65536 }) {
++        for (int nb : { 16, 24, 32, 48, 64 }) {
++            test_cases.emplace_back(new test_flash_attn_ext(256, 256, 4, {6, 1}, kv, nb, true, false, 0, 0,
++                                                            GGML_PREC_F32, GGML_TYPE_Q4_0, GGML_TYPE_Q4_0));
++        }
++    }
++
+     test_cases.emplace_back(new test_flash_attn_ext(64, 64, 8, {8, 1}, 7680,   1, true, false, 0, 0, GGML_PREC_F32, GGML_TYPE_Q8_0, GGML_TYPE_Q8_0));
+     test_cases.emplace_back(new test_flash_attn_ext(64, 64, 8, {8, 1}, 7680, 512, true, false, 0, 0, GGML_PREC_F32, GGML_TYPE_Q8_0, GGML_TYPE_Q8_0));
+ 
+-- 
+2.43.0
+
