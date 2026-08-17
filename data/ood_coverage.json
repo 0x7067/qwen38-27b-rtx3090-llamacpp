@@ -1,0 +1,26 @@
+{
+ "draft_vocab_32k.json": {
+  "ood_cli": 0.9338547569723,
+  "ood_openhermes.txt": 0.9495954605151926,
+  "ood_requests": 0.9487411094407318,
+  "ood_uv": 0.9584438270680925,
+  "ood_wikipedia_en.txt": 0.91065409500597,
+  "ood_wikipedia_pt.txt": 0.9349266080537327
+ },
+ "draft_vocab_40k.json": {
+  "ood_cli": 0.9495400420634342,
+  "ood_openhermes.txt": 0.9604669898590203,
+  "ood_requests": 0.9637997902901828,
+  "ood_uv": 0.9699008428880945,
+  "ood_wikipedia_en.txt": 0.934384706302049,
+  "ood_wikipedia_pt.txt": 0.9536522986407556
+ },
+ "draft_vocab_48k.json": {
+  "ood_cli": 0.9651401753103016,
+  "ood_openhermes.txt": 0.9682496697266106,
+  "ood_requests": 0.9761612996955418,
+  "ood_uv": 0.9786414637953631,
+  "ood_wikipedia_en.txt": 0.9525609165189468,
+  "ood_wikipedia_pt.txt": 0.9636277031626188
+ }
+}

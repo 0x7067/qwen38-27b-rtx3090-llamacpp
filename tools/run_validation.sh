@@ -3,7 +3,7 @@
 # Usage: run_validation.sh <arm-name> <drafter-file> [extra docker env args...]
 set -eu
 IMG=llama:cuda-swap-v11
-MODELS=/data/buttercup_6tb/k3s/llama-models
+MODELS="${MODELS:-/data/buttercup_6tb/k3s/llama-models}"
 BENCH="$(cd "$(dirname "$0")" && pwd)"
 ARM="$1"; DRAFTER="$2"; shift 2
 

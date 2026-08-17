@@ -33,7 +33,7 @@ Usage:
 import argparse, collections, hashlib, json, os, re, sys
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
-TOKENIZER = "/data/buttercup_6tb/k3s/vllm-trial/models/Qwen3.8-27B-W4A16-AutoRound/tokenizer.json"
+TOKENIZER = os.environ.get("QWEN_TOKENIZER_JSON", "/data/buttercup_6tb/k3s/vllm-trial/models/Qwen3.8-27B-W4A16-AutoRound/tokenizer.json")  # tokenizer.json from any Qwen3.8-27B HF repo
 TARGET_VOCAB = 248320  # text_config.vocab_size in the checkpoint; see notes below
 
 CODE_EXT = {

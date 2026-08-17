@@ -106,6 +106,32 @@ MMVQ cap env; without it, n4 is *slower* than n2 and nothing fails loudly.
   6–12% single-GPU. GDN chunked prefill (PR #26001) is lossy (KLD 0.0075).
 - Full kernel-level analysis, dead ends, and per-wave benches: `docs/PERFORMANCE.md`.
 
+## What is reproducible from this repo alone
+
+**Fully standalone** (no access to the original host needed):
+
+- The image: `Dockerfile` clones llama.cpp at the pinned ref from GitHub and applies
+  `patches/` — nothing local.
+- The truncated drafter: `data/draft_vocab_48k.json` is the exact keep-set that produced
+  the shipped GGUF. `tools/truncate_drafter.py` + `tools/validate_drafter.py` +
+  `tools/ggufio.py` are pure Python stdlib. Rebuild byte-for-byte with:
+  `tools/truncate_drafter.py mtp-Qwen3.8-27B-Q4_0.gguf data/draft_vocab_48k.json out.gguf`
+  (drafter from the HF link above). 32k/40k variants and the full ranked frequency table
+  (`data/token_freq.tsv.gz`) are included for re-slicing other set sizes without redoing
+  the corpus pass. `data/coverage.json` / `data/ood_coverage.json` are the acceptance-risk
+  evidence behind the 48k choice.
+
+**Host-shaped** (works anywhere, but the defaults describe the original machine — override
+or edit before reuse):
+
+- `tools/build_draft_vocab.py` re-derives the keep-set from a corpus; corpus roots are
+  local paths by nature (point them at *your* traffic-shaped text; tokenizer via
+  `QWEN_TOKENIZER_JSON`). You only need this to build a *different* vocabulary.
+- `tools/run_validation.sh` (models dir via `MODELS=`) and `tools/make_payloads.py`
+  (bench prompts built from local files — any large code/docs tree works; avoid chat
+  transcripts, they can make temp-0 generation emit EOS at position 0).
+- `config/llama-swap-qwen38.yaml` assumes llama-swap and this image.
+
 ## Layout
 
 ```
@@ -114,6 +140,7 @@ patches/0001..0007          the vendored patch stack (apply with git apply, in o
 tools/                      draft-vocab pipeline, GGUF surgery + validation, bench harness
 config/                     llama-swap model block (flags + env couplings, commented)
 docs/PERFORMANCE.md         full campaign write-up (waves, kernels, rejects, methodology)
+data/                       keep-sets (32k/40k/48k), ranked token frequencies, coverage evidence
 docs/truncated-draft-vocab-design.md   design doc for patch 0007 (data flow, correctness proof)
 ```
 
