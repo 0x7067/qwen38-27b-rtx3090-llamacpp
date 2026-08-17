@@ -57,6 +57,7 @@ without format-patch headers. The `Dockerfile` does all of this for you.
 | 0005 | MMA FlashAttention reads q4_0 K/V inline (cp.async → smem → dequant in place), so it no longer dequantizes the full cache to F16 every step. Batches 2–16, D=256, GQA >4 |
 | 0006 | DFlash greedy fast path requires host logits. Fixes silent acceptance=0 with GPU draft sampling |
 | 0007 | Truncated draft vocabulary for MTP drafters, using the EAGLE3 `d2t` idiom. A drafter GGUF can carry a reduced LM head plus a `d2t` I64 tensor that maps head rows to target token ids. Logits scatter back to full width with −inf elsewhere. The patch is a no-op for GGUFs without `d2t` |
+| 0008 | MMQ small-batch composite, env-gated `GGML_CUDA_MMQ_SMALLN` (1=stream-k grid multiplier, 2=+y-tile double buffer, 3=+m=1024 shape gate). Verify at n=5: −3.0 ms/forward → +7% mid / +5.4–6.4% deep decode. Caveat: the config-table half is compile-time and unconditional — env-off is not stock; see `docs/journal-2026-08-17.md` |
 
 ## Truncated draft vocabulary (patch 0007 and tools)
 
@@ -157,7 +158,7 @@ The 200+ numbers are possible because the bandwidth ceiling applies per
 verify pass, not per token: one ~30 ms pass can carry 64 draft tokens, and a
 copy round drafts them for free.
 
-## Work in progress: MMQ small-batch composite (wave 8)
+## MMQ small-batch composite (wave 8, shipped as patch 0008)
 
 The largest remaining lever is the quantized-weight GEMM (MMQ) on the
 speculative verify path. The measurements behind this
@@ -179,19 +180,20 @@ speculative verify path. The measurements behind this
   Blackwell/NVFP4-only, and SGLang cannot currently load 4-bit weights for
   this architecture on Ampere).
 
-Status 2026-08-17 (see `docs/journal-2026-08-17.md`): the pipelining premise
-was **falsified by an ncu stall breakdown** — the stock kernel sits at 56% of
-DRAM peak because of SM residency, not load scheduling, and `cp.async` is
-structurally impossible for the x tile (nibbles unpack on the way into shared
-memory). Full register pipelining recovered only ~3 µs of a ~31 µs step:
-NO-GO. What survived is a **composite** of the arm-G grid change plus a
-type-agnostic y-tile double buffer (one env var, `GGML_CUDA_MMQ_SMALLN`):
-**−2.28 ms/forward against true stock, projecting +5.2% decode**, correctness
-1267/1267. Methodology note that any reviewer needs: the composite binary's
-env-off state is 5.2% *worse* than stock (the grid config is compile-time),
-so A/Bs require an external stock reference. In review; ships as
-`patches/0008` only after the shape gate, e2e A/B, KLD, and other-model
-smoke tests pass.
+Resolution 2026-08-17 (full story in `docs/journal-2026-08-17.md`): the
+pipelining premise was **falsified by an ncu stall breakdown** — the stock
+kernel sits at 56% of DRAM peak because of SM residency, not load scheduling,
+and `cp.async` is structurally impossible for the x tile (nibbles unpack on
+the way into shared memory). Full register pipelining recovered only ~3 µs of
+a ~31 µs step: NO-GO. What survived and **shipped as `patches/0008`** is a
+composite of the arm-G grid change, a type-agnostic y-tile double buffer, and
+an m=1024 shape gate (one env var, `GGML_CUDA_MMQ_SMALLN`): verify at n=5
+drops 38.23 → 35.24 ms at mid-1k and 41.73 → 38.63 ms at 54k — **+7% mid and
++5.4–6.4% deep decode at constant acceptance**, KLD 0.00617, correctness
+1267/1267 at every level. Blast radius is structurally clean: only a backend
+that both caps MMVQ and drafts ≤7 reaches the changed path. Two reviewer
+notes: env-off in this binary is *not* stock (compile-time table change), and
+KLD is nonzero because both changes alter float accumulation order.
 
 ## Measured dead ends
 
