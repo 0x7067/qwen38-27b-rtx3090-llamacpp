@@ -136,6 +136,37 @@ binary ships in the image), or run the `llama-server` command from
 **with** the MMVQ cap env var. Without it, n4 is slower than n2 and nothing
 fails loudly. The docs have the measurements.
 
+## Work in progress: MMQ cp.async pipelining (wave 8)
+
+The largest remaining lever is the quantized-weight GEMM (MMQ) on the
+speculative verify path. The measurements behind this
+(`docs/mmq-small-batch-analysis.md`):
+
+- At batch ≥2, MMQ costs a fixed ~31 µs per call, almost independent of how
+  many columns you need. ~20 µs of that is the x-tile global→shared load
+  phase streaming at 618 GB/s where the direct-to-register path reaches 825.
+  The load is fenced by `__syncthreads` against the compute phase, so the
+  kernel waits instead of overlapping.
+- A tile-and-grid reconfiguration (`experiments/armG-*.patch`) recovered part
+  of this and measured +4.4% end-to-end: below the ship bar, preserved for
+  reference.
+- An independent SGLang profile of the same model confirms the target:
+  quantized-weight GEMM is ~77% of a single-card decode step, while the
+  Gated-DeltaNet path is ~2% and already fused
+  (`docs/sglang-claim-check.md` — the same document checks and rejects the
+  "SGLang goes beyond 100 tok/s" claim for this GPU: the numbers are real but
+  Blackwell/NVFP4-only, and SGLang cannot currently load 4-bit weights for
+  this architecture on Ampere).
+
+The in-progress change double-buffers the x-tile load with `cp.async`
+(Ampere's asynchronous global→shared copy), so the kernel loads tile N+1
+while computing tile N. It is Ampere-only and env-gated
+(`GGML_CUDA_MMQ_CPASYNC=1`); the default path stays byte-identical. Success
+bar: recover ≥10 µs of the ~20 µs streaming gap at verify batches 2–8, with
+no regression at batch 1, batch ≥9, or prefill. Expect end-to-end gains to
+attenuate roughly 3× from op-level gains; that lesson is measured in the
+analysis doc. The patch will land here as `patches/0008` if it ships.
+
 ## Measured dead ends
 
 These were measured so you do not have to repeat them:
@@ -187,7 +218,10 @@ patches/0001..0007          the vendored patch stack (apply with git apply, in o
 tools/                      draft-vocab pipeline, GGUF surgery + validation, bench harness
 data/                       keep-sets (32k/40k/48k), ranked token frequencies, coverage evidence
 config/                     llama-swap model block (flags + env couplings, commented)
+experiments/                measured but unshipped patches (see experiments/README.md)
 docs/PERFORMANCE.md         full campaign write-up (waves, kernels, rejects, methodology)
+docs/mmq-small-batch-analysis.md       MMQ verify-path analysis behind the wave-8 work
+docs/sglang-claim-check.md  the "SGLang >100 tok/s" claim, checked against this GPU
 docs/truncated-draft-vocab-design.md   design doc for patch 0007 (data flow, correctness proof)
 ```
 

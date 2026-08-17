@@ -1,0 +1,98 @@
+diff --git i/ggml/src/ggml-cuda/mmq-config-ampere.cuh w/ggml/src/ggml-cuda/mmq-config-ampere.cuh
+index 311561686..5e9b2c8bb 100644
+--- i/ggml/src/ggml-cuda/mmq-config-ampere.cuh
++++ w/ggml/src/ggml-cuda/mmq-config-ampere.cuh
+@@ -33,12 +33,12 @@ static constexpr __host__ __device__ ggml_cuda_mmq_config ggml_cuda_mmq_get_conf
+     CASE(GGML_TYPE_Q2_0, 256, 1, 128, 112, GGML_CUDA_MMQ_SRAM_LAYOUT_Q8_0, MMQ_ITER_K, true, false);
+     CASE(GGML_TYPE_Q2_0, 256, 1, 128, 128, GGML_CUDA_MMQ_SRAM_LAYOUT_Q8_0, MMQ_ITER_K, true, false);
+ 
+-    CASE(GGML_TYPE_Q4_0, 256, 1, 128,   8, GGML_CUDA_MMQ_SRAM_LAYOUT_Q8_0, MMQ_ITER_K, true, true);
++    CASE(GGML_TYPE_Q4_0, 128, 1,  64,   8, GGML_CUDA_MMQ_SRAM_LAYOUT_Q8_0, MMQ_ITER_K, true, true);
+     CASE(GGML_TYPE_Q4_0, 256, 1, 128,  16, GGML_CUDA_MMQ_SRAM_LAYOUT_Q8_0, MMQ_ITER_K, true, true);
+     CASE(GGML_TYPE_Q4_0, 256, 1, 128,  32, GGML_CUDA_MMQ_SRAM_LAYOUT_Q8_0, MMQ_ITER_K, true, true);
+     CASE(GGML_TYPE_Q4_0, 256, 1, 128,  64, GGML_CUDA_MMQ_SRAM_LAYOUT_Q8_0, MMQ_ITER_K, true, true);
+     CASE(GGML_TYPE_Q4_0, 256, 1, 128, 128, GGML_CUDA_MMQ_SRAM_LAYOUT_Q8_0, MMQ_ITER_K, true, true);
+-    CASE(GGML_TYPE_Q4_0, 256, 1, 128,   8, GGML_CUDA_MMQ_SRAM_LAYOUT_Q8_0, MMQ_ITER_K, true, false);
++    CASE(GGML_TYPE_Q4_0, 128, 1,  64,   8, GGML_CUDA_MMQ_SRAM_LAYOUT_Q8_0, MMQ_ITER_K, true, false);
+     CASE(GGML_TYPE_Q4_0, 256, 1, 128,  16, GGML_CUDA_MMQ_SRAM_LAYOUT_Q8_0, MMQ_ITER_K, true, false);
+     CASE(GGML_TYPE_Q4_0, 256, 1, 128,  24, GGML_CUDA_MMQ_SRAM_LAYOUT_Q8_0, MMQ_ITER_K, true, false);
+     CASE(GGML_TYPE_Q4_0, 256, 1, 128,  32, GGML_CUDA_MMQ_SRAM_LAYOUT_Q8_0, MMQ_ITER_K, true, false);
+@@ -101,12 +101,12 @@ static constexpr __host__ __device__ ggml_cuda_mmq_config ggml_cuda_mmq_get_conf
+     CASE(GGML_TYPE_Q5_1, 256, 1, 128, 112, GGML_CUDA_MMQ_SRAM_LAYOUT_Q8_1, MMQ_ITER_K, true, false);
+     CASE(GGML_TYPE_Q5_1, 256, 1, 128, 128, GGML_CUDA_MMQ_SRAM_LAYOUT_Q8_1, MMQ_ITER_K, true, false);
+ 
+-    CASE(GGML_TYPE_Q8_0, 256, 1, 128,   8, GGML_CUDA_MMQ_SRAM_LAYOUT_Q8_0, MMQ_ITER_K, true, true);
++    CASE(GGML_TYPE_Q8_0, 128, 1,  64,   8, GGML_CUDA_MMQ_SRAM_LAYOUT_Q8_0, MMQ_ITER_K, true, true);
+     CASE(GGML_TYPE_Q8_0, 256, 1, 128,  16, GGML_CUDA_MMQ_SRAM_LAYOUT_Q8_0, MMQ_ITER_K, true, true);
+     CASE(GGML_TYPE_Q8_0, 256, 1, 128,  32, GGML_CUDA_MMQ_SRAM_LAYOUT_Q8_0, MMQ_ITER_K, true, true);
+     CASE(GGML_TYPE_Q8_0, 256, 1, 128,  64, GGML_CUDA_MMQ_SRAM_LAYOUT_Q8_0, MMQ_ITER_K, true, true);
+     CASE(GGML_TYPE_Q8_0, 256, 1, 128, 128, GGML_CUDA_MMQ_SRAM_LAYOUT_Q8_0, MMQ_ITER_K, true, true);
+-    CASE(GGML_TYPE_Q8_0, 256, 1, 128,   8, GGML_CUDA_MMQ_SRAM_LAYOUT_Q8_0, MMQ_ITER_K, true, false);
++    CASE(GGML_TYPE_Q8_0, 128, 1,  64,   8, GGML_CUDA_MMQ_SRAM_LAYOUT_Q8_0, MMQ_ITER_K, true, false);
+     CASE(GGML_TYPE_Q8_0, 256, 1, 128,  16, GGML_CUDA_MMQ_SRAM_LAYOUT_Q8_0, MMQ_ITER_K, true, false);
+     CASE(GGML_TYPE_Q8_0, 256, 1, 128,  24, GGML_CUDA_MMQ_SRAM_LAYOUT_Q8_0, MMQ_ITER_K, true, false);
+     CASE(GGML_TYPE_Q8_0, 256, 1, 128,  32, GGML_CUDA_MMQ_SRAM_LAYOUT_Q8_0, MMQ_ITER_K, true, false);
+@@ -154,12 +154,12 @@ static constexpr __host__ __device__ ggml_cuda_mmq_config ggml_cuda_mmq_get_conf
+     CASE(GGML_TYPE_Q3_K, 256, 1, 128, 112, GGML_CUDA_MMQ_SRAM_LAYOUT_Q3_K, MMQ_ITER_K, true, false);
+     CASE(GGML_TYPE_Q3_K, 256, 1, 128, 128, GGML_CUDA_MMQ_SRAM_LAYOUT_Q3_K, MMQ_ITER_K, true, false);
+ 
+-    CASE(GGML_TYPE_Q4_K, 256, 1, 128,   8, GGML_CUDA_MMQ_SRAM_LAYOUT_Q8_1, MMQ_ITER_K, true, true);
++    CASE(GGML_TYPE_Q4_K, 128, 1,  64,   8, GGML_CUDA_MMQ_SRAM_LAYOUT_Q8_1, MMQ_ITER_K, true, true);
+     CASE(GGML_TYPE_Q4_K, 128, 1,  64,  16, GGML_CUDA_MMQ_SRAM_LAYOUT_Q8_1, MMQ_ITER_K, true, true);
+     CASE(GGML_TYPE_Q4_K, 256, 1, 128,  32, GGML_CUDA_MMQ_SRAM_LAYOUT_Q8_1, MMQ_ITER_K, true, true);
+     CASE(GGML_TYPE_Q4_K, 256, 1, 128,  64, GGML_CUDA_MMQ_SRAM_LAYOUT_Q8_1, MMQ_ITER_K, true, true);
+     CASE(GGML_TYPE_Q4_K, 256, 1, 128, 128, GGML_CUDA_MMQ_SRAM_LAYOUT_Q8_1, MMQ_ITER_K, true, true);
+-    CASE(GGML_TYPE_Q4_K, 256, 1, 128,   8, GGML_CUDA_MMQ_SRAM_LAYOUT_Q8_1, MMQ_ITER_K, true, false);
++    CASE(GGML_TYPE_Q4_K, 128, 1,  64,   8, GGML_CUDA_MMQ_SRAM_LAYOUT_Q8_1, MMQ_ITER_K, true, false);
+     CASE(GGML_TYPE_Q4_K, 128, 1,  64,  16, GGML_CUDA_MMQ_SRAM_LAYOUT_Q8_1, MMQ_ITER_K, true, false);
+     CASE(GGML_TYPE_Q4_K, 256, 1, 128,  24, GGML_CUDA_MMQ_SRAM_LAYOUT_Q8_1, MMQ_ITER_K, true, false);
+     CASE(GGML_TYPE_Q4_K, 256, 1, 128,  32, GGML_CUDA_MMQ_SRAM_LAYOUT_Q8_1, MMQ_ITER_K, true, false);
+@@ -188,12 +188,12 @@ static constexpr __host__ __device__ ggml_cuda_mmq_config ggml_cuda_mmq_get_conf
+     CASE(GGML_TYPE_Q5_K, 256, 1, 128, 112, GGML_CUDA_MMQ_SRAM_LAYOUT_Q8_1, MMQ_ITER_K, true, false);
+     CASE(GGML_TYPE_Q5_K, 256, 1, 128, 128, GGML_CUDA_MMQ_SRAM_LAYOUT_Q8_1, MMQ_ITER_K, true, false);
+ 
+-    CASE(GGML_TYPE_Q6_K, 256, 1, 128,   8, GGML_CUDA_MMQ_SRAM_LAYOUT_Q6_K, MMQ_ITER_K, true, true);
++    CASE(GGML_TYPE_Q6_K, 128, 1,  64,   8, GGML_CUDA_MMQ_SRAM_LAYOUT_Q6_K, MMQ_ITER_K, true, true);
+     CASE(GGML_TYPE_Q6_K, 256, 1, 128,  16, GGML_CUDA_MMQ_SRAM_LAYOUT_Q6_K, MMQ_ITER_K, true, true);
+     CASE(GGML_TYPE_Q6_K, 256, 1, 128,  32, GGML_CUDA_MMQ_SRAM_LAYOUT_Q6_K, MMQ_ITER_K, true, true);
+     CASE(GGML_TYPE_Q6_K, 256, 1, 128,  64, GGML_CUDA_MMQ_SRAM_LAYOUT_Q6_K, MMQ_ITER_K, true, true);
+     CASE(GGML_TYPE_Q6_K, 256, 1, 128, 128, GGML_CUDA_MMQ_SRAM_LAYOUT_Q6_K, MMQ_ITER_K, true, true);
+-    CASE(GGML_TYPE_Q6_K, 256, 1, 128,   8, GGML_CUDA_MMQ_SRAM_LAYOUT_Q6_K, MMQ_ITER_K, true, false);
++    CASE(GGML_TYPE_Q6_K, 128, 1,  64,   8, GGML_CUDA_MMQ_SRAM_LAYOUT_Q6_K, MMQ_ITER_K, true, false);
+     CASE(GGML_TYPE_Q6_K, 256, 1, 128,  16, GGML_CUDA_MMQ_SRAM_LAYOUT_Q6_K, MMQ_ITER_K, true, false);
+     CASE(GGML_TYPE_Q6_K, 256, 1, 128,  24, GGML_CUDA_MMQ_SRAM_LAYOUT_Q6_K, MMQ_ITER_K, true, false);
+     CASE(GGML_TYPE_Q6_K, 256, 1, 128,  32, GGML_CUDA_MMQ_SRAM_LAYOUT_Q6_K, MMQ_ITER_K, true, false);
+diff --git i/ggml/src/ggml-cuda/mmq.cuh w/ggml/src/ggml-cuda/mmq.cuh
+index 2eb15fdfa..a3d2d12b1 100644
+--- i/ggml/src/ggml-cuda/mmq.cuh
++++ w/ggml/src/ggml-cuda/mmq.cuh
+@@ -1433,7 +1433,28 @@ static void launch_mul_mat_q(ggml_backend_cuda_context & ctx, const mmq_args & a
+     const int ntiles_dst = ntx * nty * ntzw;
+     const int tiles_nwaves = (ntiles_dst + nsm - 1) / nsm;
+     const int tiles_efficiency_percent = 100 * ntiles_dst / (nsm*tiles_nwaves);
+-    const dim3 block_nums_stream_k(GGML_CUDA_CC_IS_NVIDIA(cc) && tiles_efficiency_percent >= 90 ? ntiles_dst : nsm, 1, 1);
++
++    // Vendored, env-gated (GGML_CUDA_MMQ_SMALLN=1): give small-J launches more than one block per SM.
++    // A J=8 tile is what a speculative-verify batch of 2..8 lands on. The stream-k grid is nsm
++    // blocks, so such a launch runs one block per SM -- 256 of 1536 threads on an RTX 3090 -- and
++    // has too few outstanding loads to saturate DRAM: measured 618 GB/s against the 825 GB/s the
++    // MMVQ path gets on the same weights. The shared-memory tile only uses ~40 of the 100 KB
++    // budget, so the spare capacity is real. I is pinned to nthreads/2 by the warp->row mapping
++    // (mmq.cuh:484), which is why raising nthreads or lowering I cannot fix this on its own.
++    int nblocks_sk = nsm;
++    if (config.J <= 8 && nbytes_shared > 0) {
++        const int smpbo = ggml_cuda_info().devices[id].smpbo;
++        int blocks_per_sm = smpbo / nbytes_shared;
++        blocks_per_sm = blocks_per_sm < 1 ? 1 : (blocks_per_sm > 8 ? 8 : blocks_per_sm);
++        static const bool smalln = [] {
++            const char * env = getenv("GGML_CUDA_MMQ_SMALLN");
++            return env != nullptr && *env != '\0' && atoi(env) != 0;
++        }();
++        if (smalln) {
++            nblocks_sk = nsm * blocks_per_sm;
++        }
++    }
++    const dim3 block_nums_stream_k(GGML_CUDA_CC_IS_NVIDIA(cc) && tiles_efficiency_percent >= 90 ? ntiles_dst : nblocks_sk, 1, 1);
+ 
+     GGML_ASSERT(ntiles_dst * blocks_per_ne00_fd.z < (1 << 30)); // Assert that variable kbc will not overflow.
+ 

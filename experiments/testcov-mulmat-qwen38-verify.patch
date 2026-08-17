@@ -1,0 +1,48 @@
+diff --git i/tests/test-backend-ops.cpp w/tests/test-backend-ops.cpp
+index e61f99eb1..7fbf7add2 100644
+--- i/tests/test-backend-ops.cpp
++++ w/tests/test-backend-ops.cpp
+@@ -9093,6 +9093,21 @@ static std::vector<std::unique_ptr<test_case>> make_test_cases_eval() {
+     test_cases.emplace_back(new test_mul_mat_hadamard(GGML_TYPE_F32, GGML_TYPE_F32, 32, 1, 32)); // too small (N<64)
+     test_cases.emplace_back(new test_mul_mat_hadamard(GGML_TYPE_F32, GGML_TYPE_F32, 1024, 1, 1024)); // too big (N>512)
+ 
++    // Qwen3.8-27B (Q4_K_L) dense weight shapes at speculative-verify batch sizes.
++    // n = 1..9 straddles the MMVQ/MMQ dispatch boundary, which is where a draft-n 4
++    // verify step lands. m is the output row count, k the reduction dim.
++    for (int n = 1; n < 10; ++n) {
++        test_cases.emplace_back(new test_mul_mat(GGML_TYPE_Q4_0, GGML_TYPE_F32,  17408, n,  5120, {1, 1}, {1, 1})); // ffn_up, ffn_gate
++        test_cases.emplace_back(new test_mul_mat(GGML_TYPE_Q4_0, GGML_TYPE_F32,   5120, n, 17408, {1, 1}, {1, 1})); // ffn_down
++        test_cases.emplace_back(new test_mul_mat(GGML_TYPE_Q6_K, GGML_TYPE_F32,  10240, n,  5120, {1, 1}, {1, 1})); // attn_qkv (gated-deltanet)
++        test_cases.emplace_back(new test_mul_mat(GGML_TYPE_Q4_K, GGML_TYPE_F32,   6144, n,  5120, {1, 1}, {1, 1})); // attn_gate (gated-deltanet)
++        test_cases.emplace_back(new test_mul_mat(GGML_TYPE_Q8_0, GGML_TYPE_F32,   5120, n,  6144, {1, 1}, {1, 1})); // ssm_out
++        test_cases.emplace_back(new test_mul_mat(GGML_TYPE_Q4_0, GGML_TYPE_F32,  12288, n,  5120, {1, 1}, {1, 1})); // attn_q
++        test_cases.emplace_back(new test_mul_mat(GGML_TYPE_Q4_0, GGML_TYPE_F32,   1024, n,  5120, {1, 1}, {1, 1})); // attn_k, attn_v
++        test_cases.emplace_back(new test_mul_mat(GGML_TYPE_Q4_0, GGML_TYPE_F32,   5120, n,  6144, {1, 1}, {1, 1})); // attn_output
++        test_cases.emplace_back(new test_mul_mat(GGML_TYPE_Q8_0, GGML_TYPE_F32, 248320, n,  5120, {1, 1}, {1, 1})); // output head
++    }
++
+ #if 0
+     // > 4GB A matrix. Too slow to be enabled by default.
+     test_cases.emplace_back(new test_mul_mat(GGML_TYPE_F16, GGML_TYPE_F16,  900000,  3, 2592, {1, 1}, {1, 1}));
+@@ -10073,6 +10088,21 @@ static std::vector<std::unique_ptr<test_case>> make_test_cases_eval() {
+ static std::vector<std::unique_ptr<test_case>> make_test_cases_perf() {
+     std::vector<std::unique_ptr<test_case>> test_cases;
+ 
++    // Qwen3.8-27B (Q4_K_L) dense weight shapes at speculative-verify batch sizes.
++    // n = 1..9 straddles the MMVQ/MMQ dispatch boundary, which is where a draft-n 4
++    // verify step lands. m is the output row count, k the reduction dim.
++    for (int n = 1; n < 10; ++n) {
++        test_cases.emplace_back(new test_mul_mat(GGML_TYPE_Q4_0, GGML_TYPE_F32,  17408, n,  5120, {1, 1}, {1, 1})); // ffn_up, ffn_gate
++        test_cases.emplace_back(new test_mul_mat(GGML_TYPE_Q4_0, GGML_TYPE_F32,   5120, n, 17408, {1, 1}, {1, 1})); // ffn_down
++        test_cases.emplace_back(new test_mul_mat(GGML_TYPE_Q6_K, GGML_TYPE_F32,  10240, n,  5120, {1, 1}, {1, 1})); // attn_qkv (gated-deltanet)
++        test_cases.emplace_back(new test_mul_mat(GGML_TYPE_Q4_K, GGML_TYPE_F32,   6144, n,  5120, {1, 1}, {1, 1})); // attn_gate (gated-deltanet)
++        test_cases.emplace_back(new test_mul_mat(GGML_TYPE_Q8_0, GGML_TYPE_F32,   5120, n,  6144, {1, 1}, {1, 1})); // ssm_out
++        test_cases.emplace_back(new test_mul_mat(GGML_TYPE_Q4_0, GGML_TYPE_F32,  12288, n,  5120, {1, 1}, {1, 1})); // attn_q
++        test_cases.emplace_back(new test_mul_mat(GGML_TYPE_Q4_0, GGML_TYPE_F32,   1024, n,  5120, {1, 1}, {1, 1})); // attn_k, attn_v
++        test_cases.emplace_back(new test_mul_mat(GGML_TYPE_Q4_0, GGML_TYPE_F32,   5120, n,  6144, {1, 1}, {1, 1})); // attn_output
++        test_cases.emplace_back(new test_mul_mat(GGML_TYPE_Q8_0, GGML_TYPE_F32, 248320, n,  5120, {1, 1}, {1, 1})); // output head
++    }
++
+     // SWIGLU at a 27B-class FFN width, fused [gate|up] vs split operands
+     // note: same bytes either way, so a backend that indexes them differently shows it here
+     for (ggml_type type : {GGML_TYPE_F16, GGML_TYPE_F32}) {
