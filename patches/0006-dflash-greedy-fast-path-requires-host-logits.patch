@@ -1,0 +1,20 @@
+diff --git a/common/speculative.cpp b/common/speculative.cpp
+index b0887cb76..dbcee45a0 100644
+--- a/common/speculative.cpp
++++ b/common/speculative.cpp
+@@ -1361,7 +1361,14 @@ struct common_speculative_impl_draft_dflash : public common_speculative_impl {
+         // Fast path for plain greedy decoding: skips the sampler chain (top_k + dist)
+         // in the non-dspark branch below when it would reduce to a full-vocab argmax
+         // anyway (see the comment at that branch for why this is exact).
+-        const bool greedy_fast_path = !is_dspark && params.p_min <= 0.0f;
++        // Requires host-side logits. With backend sampling the draft logits are not
++        // available to llama_get_logits_ith() in a form this argmax can use - the
++        // backend chain emits top_k candidates, not full-vocab logits - and every
++        // drafted token comes out wrong: measured acceptance exactly 0 and a ~2.5x
++        // decode slowdown, with no diagnostic. Fall through to the sampler chain,
++        // which consumes the backend-sampled token per index via
++        // llama_get_sampled_token_ith().
++        const bool greedy_fast_path = !is_dspark && params.p_min <= 0.0f && !params.backend_sampling;
+ 
+         const int64_t t_sample0 = prof ? ggml_time_us() : 0;
+         for (llama_seq_id seq_id = 0; seq_id < (llama_seq_id) n_seq; ++seq_id) {

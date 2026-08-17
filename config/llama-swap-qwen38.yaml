@@ -1,0 +1,58 @@
+      "qwen3.8-27b":
+        # Bartowski's imatrix Q4_K_L conversion keeps embedding/output tensors
+        # at Q8_0. It passed exact output, tool calling, 10/10 vision, and a
+        # 90,040-token retrieval on this pinned runtime. The hybrid DeltaNet
+        # arch keeps KV to 16 of 64 layers (~18 KB/token at q4_0), so 131k fits
+        # the 24 GB 3090 with everything resident (23,350 MiB peak observed
+        # at draft-n 4). Native 262k would need ~4.6 GB KV — doesn't fit
+        # alongside the drafter + mmproj; drop both to trade speed/vision
+        # for context.
+        # 2026-08-16 tuning (image v6): GGML_CUDA_MMVQ_NE11_MAX=3 routes this
+        # model's 4-8-token speculative verify batches onto the tiled MMQ path
+        # (measured crossover N≈3.4 on the 3090; KLD vs stock 0.0063), which
+        # with the v7+ inline-dequant FA kernel makes larger drafts nearly
+        # free to verify (MMQ's J=8 tile: a batch-8 verify costs 1.7% more
+        # than batch-2). draft-n 5 measured 2026-08-17 on v10, same-block
+        # ABAB: mid1k 70.5→84.1 (+19%), 54k 66.8→69.3, short 68.4→72.4,
+        # 7k prose 68.7→69.5 — wins everywhere. n6/n7 lose (acceptance
+        # economics); n≥8 would cross the J=16 MMQ tile (+9%). The env is per-backend on purpose — a blanket
+        # cap cost gemma4-A4B 34% of its decode. p-min was DROPPED after a
+        # same-block A/B with the cap active: −10.8% on 1k prose with
+        # non-overlapping rep ranges, and it makes per-request latency
+        # nondeterministic (±8% swings from variable draft length); plain
+        # n-max 4 is bit-deterministic at temp 0 (t/s within 0.12%).
+        # reasoning_effort: the model's chat template defaults to xhigh, which
+        # overthinks wildly (community-measured 22k reasoning tokens on trivial
+        # tasks). Server default is set to medium via --chat-template-kwargs;
+        # clients can override per request with reasoning_effort (v9+ maps the
+        # OpenAI field) or chat_template_kwargs. This is a quality/latency
+        # trade, not lossless — raise to xhigh per request for hard problems.
+        # COUPLED SETTINGS: draft-n 5 is only a win BECAUSE of the env cap.
+        # With the env unset or mistyped, n-max 4 is SLOWER than n-max 2
+        # (60.8 vs 63.7 t/s at 1k) and nothing fails loudly — never change
+        # one without the other. Verify after any change (model loaded):
+        #   kubectl -n apps exec deploy/llama -c llama-swap -- sh -c \
+        #     'tr "\0" "\n" < /proc/$(pgrep -x llama-server|head -1)/environ | grep MMVQ'
+        env:
+          - "GGML_CUDA_MMVQ_NE11_MAX=3"
+          # JSON via env, not a cmd flag: llama-swap's shell-word splitting
+          # strips the quotes from a --chat-template-kwargs argument.
+          - 'LLAMA_ARG_CHAT_TEMPLATE_KWARGS={"reasoning_effort":"medium"}'
+        cmd: >
+          /usr/local/bin/llama-server
+          -m /models/Qwen3.8-27B-Q4_K_L.gguf
+          --mmproj /models/mmproj-Qwen3.8-27B-Q8_0.gguf
+          --host 0.0.0.0 --port ${PORT}
+          --ctx-size 131072
+          --predict 131072
+          --threads 8 --threads-batch 8 --parallel 1
+          --batch-size 512 --ubatch-size 512
+          --no-mmap -fa on --jinja
+          --cache-type-k q4_0 --cache-type-v q4_0
+          --cache-type-k-draft q4_0 --cache-type-v-draft q4_0
+          --temp 1.0 --top-k 20 --top-p 0.95 --min-p 0.0 --repeat-penalty 1.0
+          --model-draft /models/mtp-Qwen3.8-27B-Q4_0.gguf
+          --spec-type draft-mtp --spec-draft-n-max 5
+          -ngl 99 -ngld 99
+        ttl: 3600
+
