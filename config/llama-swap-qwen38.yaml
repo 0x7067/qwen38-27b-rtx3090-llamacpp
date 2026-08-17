@@ -51,8 +51,39 @@
           --cache-type-k q4_0 --cache-type-v q4_0
           --cache-type-k-draft q4_0 --cache-type-v-draft q4_0
           --temp 1.0 --top-k 20 --top-p 0.95 --min-p 0.0 --repeat-penalty 1.0
-          --model-draft /models/mtp-Qwen3.8-27B-Q4_0.gguf
-          --spec-type draft-mtp --spec-draft-n-max 5
+          --model-draft /models/mtp-Qwen3.8-27B-Q4_0-d48k.gguf
+          --spec-type draft-mtp,ngram-mod --spec-draft-n-max 5
+          --spec-ngram-mod-n-match 32
           -ngl 99 -ngld 99
         ttl: 3600
+        # n-match 32 (was default 24), swept 2026-08-17: a longer match key
+        # cuts false fires everywhere — 8-turn session 198.6 -> 260.8 t/s
+        # overall vs the default, and the pathological-54k worst case
+        # improves 61.1 -> 61.8 (vs 62.9 without ngram). n-match 48 starts
+        # sessions too slowly; n-max 32 gives up half the copy win.
+        # 2026-08-17 ngram-mod stacking (no image change needed): ngram-mod
+        # drafts long verbatim copies from a host-RAM lookup table (zero VRAM)
+        # and PREEMPTS the MTP drafter on rounds where it finds a >=48-token
+        # chain (its --spec-ngram-mod-n-min discard gate); MTP handles all
+        # other rounds. Defaults (n-min 48 / n-max 64 / n-match 24) measured
+        # best; capping n-max at 16 gave up half the win. Measured on v11:
+        # 8-turn cumulative file-editing session 108.8 -> 237.2 t/s (+118%);
+        # repeated queries +~50%; prose7k +7%; worst case 54k one-shot with a
+        # repetitive prompt -2.9% (long matches that bait rejected drafts).
+        # Verify batches can reach 64 wide on copy rounds - outside patch
+        # 0005's 2..16 FA range (falls back to full-cache-dequant MMA), still
+        # a large net win because one wide accepted batch replaces ~12 cycles.
+        # Lossless: same verify contract as MTP (near-tie argmax flips at
+        # temp 0 are numerics-level, same class as changing draft-n).
+        # 2026-08-17 wave 7 (image v11, patch 0007): the drafter is the Q4_0 MTP
+        # file with its 248,320-row output head truncated to the 49,152 tokens
+        # covering 98.5% of held-out traffic (d2t tensor maps rows back to
+        # target ids; requires image >= v11 — older images fail the tensor
+        # shape check at load). Measured same-payload A/B: mid1k 75.0->79.6,
+        # 7k 64.7->68.2, 54k 59.4->62.9 t/s, output sha-identical, -546 MiB.
+        # The d48k file is NOT downloaded by fetch-models.sh — it is generated
+        # locally (tools in the private qwen38-27b-rtx3090-llamacpp repo, or
+        # rebuild from mtp-Qwen3.8-27B-Q4_0.gguf + draft_vocab_48k.json).
+        # Rollback: point --model-draft back at mtp-Qwen3.8-27B-Q4_0.gguf
+        # (works on any image; the d2t path is a no-op without the tensor).
 

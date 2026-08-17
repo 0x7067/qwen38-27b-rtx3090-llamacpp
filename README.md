@@ -136,7 +136,28 @@ binary ships in the image), or run the `llama-server` command from
 **with** the MMVQ cap env var. Without it, n4 is slower than n2 and nothing
 fails loudly. The docs have the measurements.
 
-## Work in progress: MMQ cp.async pipelining (wave 8)
+## Stacked n-gram drafting (config-only, the biggest single win)
+
+Agentic sessions spend much of their decode re-emitting files the model was
+shown or just wrote. `--spec-type draft-mtp,ngram-mod` adds llama.cpp's
+n-gram drafter on top of MTP: it keeps a host-RAM table of the session's
+tokens and, when the last 32 tokens exactly match a stored chain
+(`--spec-ngram-mod-n-match 32`; the default 24 fires on incidental quotes),
+drafts up to 64 tokens of verbatim copy in one round. It preempts the MTP
+drafter only on those rounds; everything else is unchanged. Same lossless
+verify contract as MTP.
+
+Measured (temp 0, v11): 8-turn cumulative file-editing session **108.8 →
+260.8 tok/s** overall (warm turns 237–288); repeated queries +~50%; prose-7k
++7%; worst case −1.7% on a deliberately pathological self-repeating 54k
+prompt. Zero VRAM. `tools/session_bench.py` is the workload — one-shot
+benchmarks cannot see this technique, which is why early reports dismissed it.
+
+The 200+ numbers are possible because the bandwidth ceiling applies per
+verify pass, not per token: one ~30 ms pass can carry 64 draft tokens, and a
+copy round drafts them for free.
+
+## Work in progress: MMQ small-batch composite (wave 8)
 
 The largest remaining lever is the quantized-weight GEMM (MMQ) on the
 speculative verify path. The measurements behind this
@@ -158,14 +179,19 @@ speculative verify path. The measurements behind this
   Blackwell/NVFP4-only, and SGLang cannot currently load 4-bit weights for
   this architecture on Ampere).
 
-The in-progress change double-buffers the x-tile load with `cp.async`
-(Ampere's asynchronous global→shared copy), so the kernel loads tile N+1
-while computing tile N. It is Ampere-only and env-gated
-(`GGML_CUDA_MMQ_CPASYNC=1`); the default path stays byte-identical. Success
-bar: recover ≥10 µs of the ~20 µs streaming gap at verify batches 2–8, with
-no regression at batch 1, batch ≥9, or prefill. Expect end-to-end gains to
-attenuate roughly 3× from op-level gains; that lesson is measured in the
-analysis doc. The patch will land here as `patches/0008` if it ships.
+Status 2026-08-17 (see `docs/journal-2026-08-17.md`): the pipelining premise
+was **falsified by an ncu stall breakdown** — the stock kernel sits at 56% of
+DRAM peak because of SM residency, not load scheduling, and `cp.async` is
+structurally impossible for the x tile (nibbles unpack on the way into shared
+memory). Full register pipelining recovered only ~3 µs of a ~31 µs step:
+NO-GO. What survived is a **composite** of the arm-G grid change plus a
+type-agnostic y-tile double buffer (one env var, `GGML_CUDA_MMQ_SMALLN`):
+**−2.28 ms/forward against true stock, projecting +5.2% decode**, correctness
+1267/1267. Methodology note that any reviewer needs: the composite binary's
+env-off state is 5.2% *worse* than stock (the grid config is compile-time),
+so A/Bs require an external stock reference. In review; ships as
+`patches/0008` only after the shape gate, e2e A/B, KLD, and other-model
+smoke tests pass.
 
 ## Measured dead ends
 
@@ -215,12 +241,14 @@ environment variables or edit the paths before reuse:
 ```
 Dockerfile                  build llama.cpp @4df29be4f + patches (CUDA sm_86) + llama-swap
 patches/0001..0007          the vendored patch stack (apply with git apply, in order)
-tools/                      draft-vocab pipeline, GGUF surgery + validation, bench harness
+tools/                      draft-vocab pipeline, GGUF surgery + validation, bench harnesses
+                            (one-shot A/B, cumulative session, 12-turn episode metric)
 data/                       keep-sets (32k/40k/48k), ranked token frequencies, coverage evidence
 config/                     llama-swap model block (flags + env couplings, commented)
 experiments/                measured but unshipped patches (see experiments/README.md)
 docs/PERFORMANCE.md         full campaign write-up (waves, kernels, rejects, methodology)
 docs/mmq-small-batch-analysis.md       MMQ verify-path analysis behind the wave-8 work
+docs/journal-2026-08-17.md  day journal: what shipped, what was rejected, and why
 docs/sglang-claim-check.md  the "SGLang >100 tok/s" claim, checked against this GPU
 docs/truncated-draft-vocab-design.md   design doc for patch 0007 (data flow, correctness proof)
 ```
