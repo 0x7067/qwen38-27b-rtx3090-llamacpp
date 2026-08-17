@@ -79,14 +79,41 @@ Pipeline:
    `--model-draft` back at the original file; the patched binary is a no-op without
    `d2t`.
 
-## Reproduce
+## Reproduce (fresh machine with one RTX 3090)
+
+Host requirements: NVIDIA driver compatible with CUDA 12.8 (R570+), Docker with
+nvidia-container-toolkit, `jq`, Python 3.10+ (stdlib for the GGUF surgery;
+`pip install tokenizers` only for payload/vocab building).
 
 ```bash
-docker build -t llama:cuda-swap-v11 .          # llama.cpp @4df29be4f + patches, sm_86
-# bench harness (A/B two drafters, 4 depths, sha256 output-exactness check):
-tools/run_validation.sh A mtp-Qwen3.8-27B-Q4_0.gguf
-tools/run_validation.sh B mtp-Qwen3.8-27B-Q4_0-d48k.gguf
+# 1. Image (no GPU needed to build; clones llama.cpp @4df29be4f, applies patches/, sm_86)
+docker build -t llama:cuda-swap-v11 .
+
+# 2. Models (~20.5 GB, HF links below) into some $MODELS dir:
+#    Qwen3.8-27B-Q4_K_L.gguf, mmproj-Qwen3.8-27B-Q8_0.gguf, mtp-Qwen3.8-27B-Q4_0.gguf
+#    Also grab tokenizer.json from any Qwen3.8-27B HF repo (a few MB).
+
+# 3. Rebuild the truncated drafter byte-for-byte and verify it (pure stdlib):
+python3 tools/truncate_drafter.py $MODELS/mtp-Qwen3.8-27B-Q4_0.gguf \
+        data/draft_vocab_48k.json $MODELS/mtp-Qwen3.8-27B-Q4_0-d48k.gguf
+python3 tools/validate_drafter.py $MODELS/mtp-Qwen3.8-27B-Q4_0.gguf \
+        $MODELS/mtp-Qwen3.8-27B-Q4_0-d48k.gguf data/draft_vocab_48k.json
+
+# 4. Bench payloads (any large code+docs tree works as corpus, e.g. a llama.cpp checkout):
+QWEN_TOKENIZER_JSON=/path/tokenizer.json CORPUS_DIR=/path/llama.cpp \
+  python3 tools/make_payloads.py tools/
+
+# 5. A/B (4 depths, VRAM, acceptance, sha256 output-exactness check):
+MODELS=$MODELS tools/run_validation.sh A mtp-Qwen3.8-27B-Q4_0.gguf
+MODELS=$MODELS tools/run_validation.sh B mtp-Qwen3.8-27B-Q4_0-d48k.gguf
 ```
+
+Expected on a 3090: arm B beats arm A by ~5–6% at mid/deep depth with identical
+output hashes per payload. Absolute t/s shifts a little with your exact corpus
+(acceptance is content-dependent); the A-vs-B delta and hash equality are the
+replication targets. For serving, embed `config/llama-swap-qwen38.yaml` in a
+llama-swap config (the binary ships in the image), or run the `llama-server`
+command from `tools/run_validation.sh` directly.
 
 Models: [bartowski Q4_K_L main](https://huggingface.co/bartowski/Qwen3.8-27B-GGUF)
 (embeds an unused MTP block; Q8_0 embed/output), plus
@@ -128,8 +155,10 @@ or edit before reuse):
   local paths by nature (point them at *your* traffic-shaped text; tokenizer via
   `QWEN_TOKENIZER_JSON`). You only need this to build a *different* vocabulary.
 - `tools/run_validation.sh` (models dir via `MODELS=`) and `tools/make_payloads.py`
-  (bench prompts built from local files — any large code/docs tree works; avoid chat
-  transcripts, they can make temp-0 generation emit EOS at position 0).
+  (tokenizer via `QWEN_TOKENIZER_JSON`, corpus via `CORPUS_DIR` — any large code/docs
+  tree works; avoid chat transcripts, they can make temp-0 generation emit EOS at
+  position 0). Note the bench payloads are corpus-dependent, so absolute t/s varies
+  with your corpus; the A/B delta is the portable number.
 - `config/llama-swap-qwen38.yaml` assumes llama-swap and this image.
 
 ## Layout

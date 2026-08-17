@@ -1,10 +1,32 @@
-import json, os, glob
+#!/usr/bin/env python3
+"""Build the four bench payloads (short / mid1k / prose7k / agentic54k).
 
-tok = __import__("tokenizers").Tokenizer.from_file("/data/buttercup_6tb/k3s/vllm-trial/models/Qwen3.8-27B-W4A16-AutoRound/tokenizer.json")
+    QWEN_TOKENIZER_JSON=/path/to/tokenizer.json \
+    CORPUS_DIR=/path/to/any/large/code+docs/tree \
+    python3 make_payloads.py [outdir]
+
+CORPUS_DIR can be any sizeable source tree (a llama.cpp checkout works well:
+~50k+ tokens of .cpp/.md needed for the 54k payload). Avoid chat transcripts:
+at temp 0 they can make the model emit EOS at position 0, which is why the
+54k payload sets ignore_eos. Requires `pip install tokenizers`.
+"""
+import json, os, sys, glob
+from tokenizers import Tokenizer
+
+tok = Tokenizer.from_file(os.environ["QWEN_TOKENIZER_JSON"])
+corpus_dir = os.environ["CORPUS_DIR"]
+outdir = sys.argv[1] if len(sys.argv) > 1 else "."
+
+def read_all(patterns, cap_files=None):
+    files = []
+    for pat in patterns:
+        files += sorted(glob.glob(os.path.join(corpus_dir, "**", pat), recursive=True))
+    if cap_files:
+        files = files[:cap_files]
+    return "\n\n".join(open(f, errors="ignore").read() for f in files)
 
 def take_tokens(text, n):
-    ids = tok.encode(text, add_special_tokens=False).ids[:n]
-    return tok.decode(ids)
+    return tok.decode(tok.encode(text, add_special_tokens=False).ids[:n])
 
 short = ("You are a senior engineer. Explain, step by step, how a single-node k3s cluster "
          "reconciles workloads from a git repository using Flux v2: the controllers involved, "
@@ -13,27 +35,23 @@ short = ("You are a senior engineer. Explain, step by step, how a single-node k3
          "at apply time. Then write a small example kustomization.yaml for a service folder and "
          "explain each field. Be precise and complete.")
 
-# mid1k: code+prose mix ~1000 tokens
-src = open("/data/buttercup_6tb/k3s/llama-models/upstream-pr/llama.cpp/src/models/eagle3.cpp").read()
-mid1k = take_tokens(src, 850) + "\n\nSummarize what this file does, then list its key functions and their roles. Answer:"
+code = read_all(["*.cpp", "*.cu", "*.py"])
+docs = read_all(["*.md"])
+if not code or not docs:
+    sys.exit(f"CORPUS_DIR={corpus_dir} must contain .cpp/.cu/.py and .md files")
 
-# prose7k: markdown docs
-docs = ""
-for f in ["/data/docker-services/k8s/MIGRATION_LOG.md", "/data/docker-services/k8s/workloads/apps/llama/PERFORMANCE.md", "/data/docker-services/CLAUDE.md"]:
-    docs += open(f).read() + "\n\n"
-prose7k = take_tokens(docs*4, 6800) + "\n\nWrite a detailed executive summary of the infrastructure described above. Answer:"
+mid1k = take_tokens(code, 850) + "\n\nSummarize what this code does, then list its key functions and their roles. Answer:"
+prose7k = take_tokens(docs * 8, 6800) + "\n\nWrite a detailed executive summary of the material above. Answer:"
+agentic54k = take_tokens((code + docs) * 3, 53400) + \
+    "\n\nBased on the code and documentation above, list the 10 most important technical decisions made and briefly justify each. Answer:"
 
-# agentic54k: transcript + code, ~54k tokens
-big = ""
-tfiles = glob.glob("/data/docker-services/2026-*.txt")
-for f in tfiles: big += open(f, errors="ignore").read() + "\n\n"
-for f in sorted(glob.glob("/data/buttercup_6tb/k3s/llama-models/upstream-pr/llama.cpp/src/*.cpp"))[:8]:
-    big += open(f, errors="ignore").read() + "\n\n"
-big += docs
-agentic54k = take_tokens(big*3, 53500) + "\n\nBased on everything above, list the 10 most important technical decisions made and briefly justify each. Answer:"
-
-for name, prompt, npred in [("short", short, 256), ("mid1k", mid1k, 256), ("prose7k", prose7k, 256), ("agentic54k", agentic54k, 384)]:
+for name, prompt, npred, extra in [
+        ("short", short, 256, {}),
+        ("mid1k", mid1k, 256, {}),
+        ("prose7k", prose7k, 256, {}),
+        ("agentic54k", agentic54k, 384, {"ignore_eos": True})]:
     n_tok = len(tok.encode(prompt, add_special_tokens=False).ids)
-    with open(f"bench/{name}.json", "w") as f:
-        json.dump({"prompt": prompt, "n_predict": npred, "temperature": 0, "cache_prompt": False}, f)
+    payload = {"prompt": prompt, "n_predict": npred, "temperature": 0, "cache_prompt": False, **extra}
+    with open(os.path.join(outdir, f"{name}.json"), "w") as f:
+        json.dump(payload, f)
     print(name, "prompt_tokens=", n_tok)
