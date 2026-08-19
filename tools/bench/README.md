@@ -79,3 +79,12 @@ re-learn them:
   instead of (or in addition to) the target. Use `pkill -x` (exact `comm`
   match) or a cgroup-scoped kill instead; reserve `-f` for cases where you
   have verified the pattern cannot match the caller.
+
+## k8s-specific gotcha (learned in production)
+
+Under Kubernetes, llama-swap's liveness probes re-load the model seconds after a
+`/api/models/unload/<name>` succeeds, so a single unload call is NOT sufficient
+idle-gating. For exclusive GPU work on a k8s host, scale the deployment to zero
+(`kubectl -n <ns> scale deploy/<name> --replicas=0`) and restore it afterwards —
+and if the deployment is Flux-managed, suspend the Kustomization first or Flux
+will scale it back mid-run.

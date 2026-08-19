@@ -44,10 +44,13 @@ sample_once() {
         function fields(s, arr,    n) { n = split(s, arr, " "); return n }
         BEGIN {
             n1 = fields(l1, a); n2 = fields(l2, b)
-            # a[1]=user a[2]=nice a[3]=system a[4]=idle a[5]=iowait a[6]=irq a[7]=softirq a[8]=steal
-            idle1 = a[4] + a[5]; idle2 = b[4] + b[5]
+            # /proc/stat "cpu" aggregate line: a[1] is the LITERAL LABEL "cpu".
+            # a[2]=user a[3]=nice a[4]=system a[5]=idle a[6]=iowait a[7]=irq a[8]=softirq a[9]=steal
+            # (maiden-voyage bug: indexing from a[1] counted iowait as busy --
+            # exactly the loadavg failure mode this script exists to avoid.)
+            idle1 = a[5] + a[6]; idle2 = b[5] + b[6]
             total1 = 0; total2 = 0
-            for (i = 1; i <= 8; i++) { total1 += a[i]; total2 += b[i] }
+            for (i = 2; i <= 9; i++) { total1 += a[i]; total2 += b[i] }
             dtotal = total2 - total1
             didle  = idle2 - idle1
             busy_pct = (dtotal > 0) ? (100.0 * (dtotal - didle) / dtotal) : 0

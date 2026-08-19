@@ -66,13 +66,15 @@ gpu_idle_for_minutes() {
 }
 
 start_heartbeat_child() {
-    local lock_dir="$1"
+    local lock_dir="$1" holder_pid="$2"
     (
-        # This subshell IS the heartbeat. It has no reason to live past its
-        # parent, so trap every exit path and stop touching the file the
-        # instant the parent is gone. Do not let this become a daemon.
+        # This subshell IS the heartbeat. It watches the HOLDER pid (the
+        # campaign shell), not its own parent -- the parent is a one-shot CLI
+        # that exits immediately after acquire. It stops the instant the
+        # holder dies or the lock dir is removed, so a dead campaign can
+        # never look alive. Do not let this become a daemon.
         trap 'exit 0' TERM INT
-        while :; do
+        while kill -0 "$holder_pid" 2>/dev/null && [ -d "$lock_dir" ]; do
             date -u +%Y-%m-%dT%H:%M:%S%z > "$lock_dir/heartbeat" 2>/dev/null
             sleep "$HEARTBEAT_INTERVAL" &
             wait $!
@@ -114,12 +116,17 @@ cmd_acquire() {
         echo "started=$(now_iso)"
         echo "task=$task"
     } > "$lock_dir/owner"
-    start_heartbeat_child "$lock_dir"
-    # DIE-WITH-HOLDER: if this acquiring shell exits for any reason, the
-    # heartbeat child must not keep ticking and making a dead lock look
-    # alive. This trap is the actual enforcement point of that guarantee.
-    trap 'stop_heartbeat_child "'"$lock_dir"'"' EXIT
-    echo "acquired $lock_dir as $owner"
+    # DIE-WITH-HOLDER, one-shot-safe: this script is normally invoked as a
+    # one-shot CLI, so an EXIT trap here would kill the heartbeat the moment
+    # `acquire` returns (maiden-voyage bug: heartbeat was dead on arrival).
+    # Instead the heartbeat child watches the HOLDER pid -- by default the
+    # PPID of this script, i.e. the campaign shell that called acquire -- and
+    # exits when that pid dies or the lock dir disappears. Override with
+    # GPULOCK_HOLDER_PID for a different supervisor process.
+    local holder_pid="${GPULOCK_HOLDER_PID:-$PPID}"
+    echo "holder_pid=$holder_pid" >> "$lock_dir/owner"
+    start_heartbeat_child "$lock_dir" "$holder_pid"
+    echo "acquired $lock_dir as $owner (heartbeat watches pid $holder_pid)"
 }
 
 cmd_release() {
@@ -158,6 +165,8 @@ cmd_status() {
 # Forcibly take over a lock -- only after GPU idleness is proven for the
 # whole window, never on PID or heartbeat-age grounds alone.
 cmd_steal() {
+    # NOTE: blocks in the FOREGROUND for the full idle-observation window
+    # by design -- always invoke backgrounded (gpulock.sh steal ... &).
     local lock_dir="$1" owner="$2" task="${3:-}" idle_minutes="${4:-$IDLE_STALE_MINUTES_DEFAULT}"
     if [ ! -d "$lock_dir" ]; then
         cmd_acquire "$lock_dir" "$owner" "$task"
