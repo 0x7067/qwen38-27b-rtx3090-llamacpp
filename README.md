@@ -258,6 +258,23 @@ docs/truncated-draft-vocab-design.md   design doc for patch 0007 (data flow, cor
 ## License and credits
 
 The `patches/` modify [llama.cpp](https://github.com/ggml-org/llama.cpp)
-(MIT) and follow its license. The draft-vocabulary idea is adapted from
-syv-ai's vLLM work. The `d2t` mechanism reuses llama.cpp's own EAGLE3 idiom.
-Everything else here is MIT.
+(MIT) and follow its license. Everything else here is MIT.
+
+Prior art and sources this work builds on:
+
+- [syv-ai/qwen38-27b-rtx3090](https://github.com/syv-ai/qwen38-27b-rtx3090) —
+  the truncated-draft-vocabulary idea (their `build_draft_vocab.py`, for vLLM);
+  patch 0007 and `tools/` are the llama.cpp counterpart.
+- [EAGLE](https://github.com/SafeAILab/EAGLE) (Li et al.) — the `d2t`
+  draft-to-target token-map mechanism, which patch 0007 reuses via llama.cpp's
+  in-tree EAGLE3 implementation (`src/models/eagle3.cpp`).
+- [llama-swap](https://github.com/mostlygeek/llama-swap) — the model-swapping
+  proxy the `config/` block targets; its per-model `env:` lists are what make
+  the env-gated kernel caps (patches 0004/0008) deployable per-backend.
+- Model files: [bartowski](https://huggingface.co/bartowski) (main GGUF),
+  [ggml-org](https://huggingface.co/ggml-org/Qwen3.8-27B-GGUF) (MTP drafter and
+  vision projector GGUFs), and [Qwen](https://huggingface.co/Qwen) for
+  Qwen3.8-27B itself.
+- The `ngram-mod` stacking defaults in `config/` were informed by a community
+  ablation posted to r/LocalLLaMA (u/lukaLLM); tuned values are our own
+  measurements.
