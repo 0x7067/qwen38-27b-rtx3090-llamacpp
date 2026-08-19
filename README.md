@@ -42,6 +42,17 @@ cannot change output. See `docs/truncated-draft-vocab-design.md`, section 4.
 Patches 0001–0006 produced the earlier 49.8 → 69.3 tok/s campaign result.
 `docs/PERFORMANCE.md` is the full write-up.
 
+## Main quant: now UD-Q4_K_XL
+
+Prod's main-model quant moved from bartowski Q4_K_L to **unsloth
+UD-Q4_K_XL**, chosen for quality: a KLD-to-Q6K sweep found UD-Q4_K_XL at
+ratio **0.787** vs Q4_K_L's own 1.0 (lower is closer to the Q6_K reference),
+at a ~3.4% pooled-step-time cost and a small VRAM *saving*. A faster
+candidate (bartowski IQ4_XS, −7% pooled step time) was measured and rejected
+for prod because its KLD ratio (1.415) is a real quality regression, not a
+free lunch. Full sweep, a rejected 3.7bpw extreme, and the corrected
+weight-bytes cost model: `docs/quant-selection.md`.
+
 ## The patches
 
 Apply the patches onto llama.cpp commit `4df29be4f`, in order, with
@@ -253,6 +264,9 @@ docs/mmq-small-batch-analysis.md       MMQ verify-path analysis behind the wave-
 docs/journal-2026-08-17.md  day journal: what shipped, what was rejected, and why
 docs/sglang-claim-check.md  the "SGLang >100 tok/s" claim, checked against this GPU
 docs/truncated-draft-vocab-design.md   design doc for patch 0007 (data flow, correctness proof)
+docs/thermals-and-oc.md     fan-curve dead zone, NVML offset convention, OC ladder, thermal ceiling
+docs/dflash2-findings.md    DFlash2 (llama.cpp PR #27342) vs our MTP drafter: env-cap effect, caveats
+docs/quant-selection.md     main-quant sweep: why UD-Q4_K_XL, the rejected 3.7bpw extreme, cost model
 ```
 
 ## License and credits
@@ -278,3 +292,20 @@ Prior art and sources this work builds on:
 - The `ngram-mod` stacking defaults in `config/` were informed by a community
   ablation posted to r/LocalLLaMA (u/lukaLLM); tuned values are our own
   measurements.
+- [Anbeeld/BeeLlama.cpp](https://github.com/Anbeeld/beellama.cpp) — a
+  llama.cpp fork carrying its own low-bit KV-cache/quant work; evaluating a
+  hybrid of our patch stack against it (see `docs/quant-selection.md`)
+  informed how we think about weight-byte-vs-compute tradeoffs at very low
+  bit widths.
+- [KVarN](https://arxiv.org/abs/2606.03458) — the exact-tail KV-cache
+  quantization approach BeeLlama implements; its "always retain an intrinsic
+  exact-precision tail" design is the reference point our own quant-cost
+  reasoning was checked against.
+- [HoltYoung/vram-thermal-guard](https://github.com/HoltYoung/vram-thermal-guard)
+  and ThomasBaruzier's `gputemps` approach — the thermal-watchdog and
+  BAR-register GDDR6X-junction-reading approaches that made the fan-curve
+  dead-zone finding in `docs/thermals-and-oc.md` possible to measure and fix.
+- [club-3090](https://github.com/noonghunna/club-3090) — a cross-rig
+  benchmark harness for this hardware class; its pinned bench prompts and
+  report format shaped how we validated numbers in `docs/dflash2-findings.md`
+  and `docs/quant-selection.md` against other rigs.

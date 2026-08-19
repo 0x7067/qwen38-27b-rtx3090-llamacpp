@@ -510,3 +510,34 @@ machine**, the constraint that shaped the whole methodology.
   (0003) and 0.0063 (0004) measured.
 - **Verify VRAM on a clean run at the real context size**, never from `llama-bench` — it has no
   drafter, no projector, and sizes `n_ctx` to the test. The ceiling here is 23,400 MiB.
+
+## Weight-byte traffic as a decode-cost model — corrected
+
+An earlier working estimate put weight-byte traffic at **77% of decode step
+cost**, used to predict how much a smaller quant should speed up decode. A
+later dedicated decomposition (comparing measured per-step time deltas
+against each quant's actual byte-size delta, with a same-family K-quant
+control to hold dequant cost constant) found the real figure is **closer to
+40%** — the 77% model correctly *orders* candidate quants by expected speed,
+but overstates the *magnitude* of any byte-size win by roughly 2x. Two
+independent arms converged on ~40%, so this isn't one quant type's dequant
+cost skewing the estimate. Use ~40% as the working model for predicting a
+future quant change's speed effect; see `docs/quant-selection.md` for the
+full sweep this correction came from, including a 3.7bpw quant where the
+model breaks down entirely (smaller weights, slower decode — dequant cost
+overtook the bandwidth saving below 4 bits).
+
+## DFlash2 and quant selection: see their own docs
+
+Two more recent lines of investigation grew large enough for their own
+files rather than fitting here:
+
+- `docs/dflash2-findings.md` — evaluating `llama.cpp` PR #27342 (DFlash2)
+  against this repo's MTP drafter: the MMVQ/MMQ small-batch crossover flips
+  the verdict entirely, real-sampling and ngram-stacking caveats, and the
+  two upstream bugs this surfaced.
+- `docs/quant-selection.md` — the sweep behind moving prod's main quant to
+  UD-Q4_K_XL, including a rejected 3.7bpw extreme.
+- `docs/thermals-and-oc.md` — the fan-curve dead zone that was silently
+  stopping cooling at high VRAM temperature, the NVML offset convention, and
+  the shipped overclock.
